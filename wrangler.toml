@@ -1,0 +1,127 @@
+# =============================================================================
+#  NOBARA WORKERS — wrangler.toml
+#  All NON-SECRET configuration lives in this one file.
+#  Secrets (tokens/keys) are NEVER put here — see README.md ("Secrets").
+# =============================================================================
+
+name = "nobara-bot"                 # Worker name -> https://nobara-bot.<your-subdomain>.workers.dev
+main = "index.js"
+compatibility_date = "2026-11-13"
+workers_dev = true                  # keep the free *.workers.dev URL enabled
+
+[observability]
+enabled = true
+
+# -----------------------------------------------------------------------------
+#  Cron Trigger
+#  Runs every minute. One trigger drives these jobs:
+#    1) automatic backups (only when BACKUP_INTERVAL has elapsed),
+#    2) recovery sweep for broadcast jobs that stalled,
+#    3) group management: temporary ban/mute expiry, verification timeouts, delayed message deletion,
+#    4) hourly housekeeping (old dedupe rows, expired cache rows, old group history).
+# -----------------------------------------------------------------------------
+[triggers]
+crons = ["* * * * *"]
+
+# -----------------------------------------------------------------------------
+#  Queue (REQUIRED for broadcasts)
+#  Create it once before the first deploy:   npx wrangler queues create nobara-broadcast
+#  max_concurrency = 1 guarantees chunks of the same job are never processed in parallel.
+# -----------------------------------------------------------------------------
+[[queues.producers]]
+binding = "BROADCAST_QUEUE"
+queue = "nobara-broadcast"
+
+[[queues.consumers]]
+queue = "nobara-broadcast"
+max_batch_size = 1
+max_batch_timeout = 1
+max_retries = 5
+max_concurrency = 1
+
+# -----------------------------------------------------------------------------
+#  R2 bucket (OPTIONAL but recommended) — stores automatic/manual backup files.
+#  Without it, automatic backups are delivered to the owner's Telegram chat instead.
+#  Create it:   npx wrangler r2 bucket create nobara-backups   then UNCOMMENT:
+# -----------------------------------------------------------------------------
+# [[r2_buckets]]
+# binding = "BACKUPS"
+# bucket_name = "nobara-backups"
+
+# -----------------------------------------------------------------------------
+#  KV namespace (OPTIONAL) — faster cache for API results.
+#  Without it the bot caches in Turso (works fine, slightly slower).
+#  Create it:   npx wrangler kv namespace create CACHE   then paste the id and UNCOMMENT:
+# -----------------------------------------------------------------------------
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "PASTE_KV_NAMESPACE_ID_HERE"
+
+# -----------------------------------------------------------------------------
+#  Custom domain (OPTIONAL)
+# -----------------------------------------------------------------------------
+# routes = [{ pattern = "bot.example.com", custom_domain = true }]
+
+[vars]
+# ---- Identity ---------------------------------------------------------------
+OWNER_ID = ""                       # REQUIRED. Your numeric Telegram user id (send /id to the bot after deploying, or use @userinfobot)
+BOT_NAME = "MyBot"                 # Shown everywhere: /start, /help, About, panels, group messages, setup pages, backup file names
+DEVELOPER_ID = ""                   # Optional. Numeric Telegram id: the Developer button opens tg://user?id=<id> (profile pop-up)
+
+# ---- Webhook ----------------------------------------------------------------
+PUBLIC_BASE_URL = ""                # Optional. Leave empty to auto-detect from the /setup request URL. Set it when using a custom domain.
+WEBHOOK_PATH = "/webhook"           # Must not be /setup, /status, /health or /download
+
+# ---- Welcome / links (a button is hidden when its URL is empty) --------------
+DEVELOPER_URL = ""                  # Fallback when DEVELOPER_ID is empty, e.g. "https://t.me/your_username"
+UPDATES_CHANNEL_URL = ""            # e.g. "https://t.me/your_channel"
+ADD_TO_GROUP_URL = ""               # Leave empty: built automatically from the bot username
+WELCOME_EFFECT = "true"             # 🎉 confetti effect on /start in private chats (falls back automatically if Telegram rejects it)
+WELCOME_IMAGE = ""                  # Public https image URL or a Telegram photo file_id. The owner can also set it with /setwelcomeimage
+
+# ---- Anime (Taizen primary, AniList fallback) ---------------------------------
+ANIME_PRIMARY = "taizen"            # "taizen" or "anilist"
+ANIME_API = "https://taizen.moe/api/graphql"
+ANILIST_API = "https://graphql.anilist.co"
+
+# ---- Translation ---------------------------------------------------------------
+TRANSLATION_PROVIDER = "mymemory"
+TRANSLATION_API = "https://api.mymemory.translated.net/get"
+MYMEMORY_EMAIL = ""                 # Optional contact e-mail: raises MyMemory's documented daily allowance
+
+# ---- Image search ----------------------------------------------------------------
+IMAGE_PROVIDER = "pixabay"          # "pixabay" (needs PIXABAY_API_KEY secret) or "wikimedia"
+IMAGE_SEARCH_API = "https://pixabay.com/api/"
+WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
+
+# ---- Backups ----------------------------------------------------------------------
+BACKUP_ENABLED = "true"
+BACKUP_INTERVAL = "daily"           # "hourly", "6h", "12h", "daily", "weekly", or "<n>m"/"<n>h"/"<n>d"
+BACKUP_RETENTION = "7"              # number of automatic backups kept in R2
+MAX_IMPORT_BYTES = "10485760"       # largest backup file accepted by /import (10 MB)
+
+# ---- Broadcast ----------------------------------------------------------------------
+BROADCAST_CHUNK_SIZE = "25"         # recipients per queue message (free plan: keep <= 40; paid plan: up to 200)
+BROADCAST_CONCURRENCY = "10"        # parallel sends inside a chunk
+
+# ---- Cache TTLs (seconds) -----------------------------------------------------------
+CACHE_TTL_ANIME = "3600"
+CACHE_TTL_SCHEDULE = "1800"
+CACHE_TTL_TRANSLATE = "604800"
+CACHE_TTL_IMAGE = "86400"
+
+# ---- Behaviour ---------------------------------------------------------------------
+BUTTON_POPUP_ALERT = "true"         # custom callback buttons open a pop-up (true) or a toast (false)
+UI_BUTTON_STYLES = "true"            # coloured inline buttons (Bot API `style`); set "false" if your clients show errors
+UI_FANCY_BUTTONS = "true"            # Unicode bold labels on bot menu buttons
+REACTIONS = "true"                  # react to successful commands in private chats
+
+# =============================================================================
+#  SECRETS (set with `npx wrangler secret put NAME` — never write them here):
+#    BOT_TOKEN            Telegram bot token from @BotFather
+#    WEBHOOK_SECRET       random string, 1-256 chars of A-Z a-z 0-9 _ -
+#    TURSO_DATABASE_URL   libsql://your-db-your-org.turso.io
+#    TURSO_AUTH_TOKEN     token from `turso db tokens create`
+#    SETUP_SECRET         password that protects /setup and /status
+#    PIXABAY_API_KEY      optional, enables Pixabay image search
+# =============================================================================

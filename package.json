@@ -1,0 +1,25 @@
+{
+  "name": "nobara-workers",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightweight Telegram bot for Cloudflare Workers (webhook + Turso/libSQL): broadcast, anime info & schedule, translation, image search, backup/import and a custom inline-button builder.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "queue:create": "wrangler queues create nobara-broadcast",
+    "test": "node --test \"tests/*.test.js\"",
+    "check": "node scripts/setup.js check",
+    "gen": "node scripts/setup.js gen",
+    "secrets": "node scripts/setup.js secrets",
+    "sql": "node scripts/setup.js sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
